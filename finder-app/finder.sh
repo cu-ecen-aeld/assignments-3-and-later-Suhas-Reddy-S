@@ -1,25 +1,28 @@
 #!/bin/sh
-#Author: Suhas-Reddy-S
+# Author: Suhas-Reddy-S
 
-#Variables to hold fisrt and second cli arguements
+# Variables to hold first and second CLI arguments
 filesdir=$1
 searchstr=$2
 
-#Check if there are 2 arguements
-if [ "$#" -ne 2 ]
+# Check if there are 2 arguments
+if [ "$#" -ne 2 ] 
 then
-  echo "Total Number of arguements should be equal to two. First arguement is the directory path and Second arguement is the String to be searched."
+  echo "Total number of arguments should be equal to two. First argument is the directory path and the second argument is the string to be searched."
   exit 1
 else 
-  #Check if the first arguement is directory else print an error message.
+  # Check if the first argument is a directory; if not, print an error message
   if [ ! -d "${filesdir}" ] 
   then    
-    echo "Given ${filesdir} driectory doesn't exist in the filesystem. Please enter a valid path."
+    echo "Error: The specified directory '${filesdir}' doesn't exist. Please enter a valid path."
     exit 1
   else 
-    num_of_files=$(ls ${filesdir} | wc -l)   #Get number of files
-    num_of_occurances=$(grep -r ${searchstr} ${filesdir} | wc -l) #Get number of occurances
-    echo "The number of files are ${num_of_files} and the number of occurances are ${num_of_occurances}."
+    # Get the number of files in the directory
+    num_of_files=$(find "${filesdir}" -type f | wc -l)
+
+    # Get the number of occurrences of the search string
+    num_of_occurrences=$(grep -R "${searchstr}" "${filesdir}" | wc -l)
+
+    echo "The number of files is ${num_of_files} and the number of occurrences is ${num_of_occurrences}."
   fi
 fi
-
