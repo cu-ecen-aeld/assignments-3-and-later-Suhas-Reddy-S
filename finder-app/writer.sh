@@ -11,8 +11,20 @@ then
   echo "Total number of arguments should be equal to two. The first argument is the file path, and the second argument is the string to be added to the file."
   exit 1
 else
-  # Create the directory (if not exists) for the file
-  mkdir -p "$(dirname "${writefile}")"
+  # Extract the directory path from the provided file path
+  dir_path="$(dirname "${writefile}")"
+
+  # Check if the directory already exists
+  if [ ! -d "$dir_path" ]; then
+    # Create the directory if it doesn't exist
+    mkdir -p "$dir_path"
+  fi
+
+  # Check if the specified path is a directory
+  if [ -d "$writefile" ]; then
+    echo "Error: The specified path is a directory. Please provide a valid file path."
+    exit 1
+  fi
 
   # Write the string to the file
   echo "${writestr}" > "${writefile}"
