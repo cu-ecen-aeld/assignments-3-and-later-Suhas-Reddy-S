@@ -17,8 +17,8 @@ else
     echo "Given ${filesdir} driectory doesn't exist in the filesystem. Please enter a valid path."
     exit 1
   else 
-    num_of_files=$(ls -R ${filesdir} | wc -l)   #Get number of files
-    num_of_occurances=$(grep -R ${searchstr} ${filesdir} | wc -l) #Get number of occurances
+    num_of_files=$(ls ${filesdir} | wc -l)   #Get number of files
+    num_of_occurances=$(grep -r ${searchstr} ${filesdir} | wc -l) #Get number of occurances
     echo "The number of files are ${num_of_files} and the number of occurances are ${num_of_occurances}."
   fi
 fi
