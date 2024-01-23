@@ -11,8 +11,10 @@ then
 else 
   if [ ! -d "${filesdir}" ] 
   then
-    echo "Given ${filesdir} driectory doesn't exist in the filesystem. Please enter a valid path."
-    exit 1
+    if [ ! -e "${filesdir}" ]
+      echo "Given ${filesdir} driectory doesn't exist in the filesystem. Please enter a valid path."
+      exit 1
+    fi
   else 
     num_of_files=$(ls -R ${filesdir} | wc -l)
     num_of_occurances=$(grep -R ${searchstr} ${filesdir} | wc -l)
