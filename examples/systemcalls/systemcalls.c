@@ -17,7 +17,8 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    return true;
+    // int sys_return = system(cmd);
+    return system(cmd) == 0;
 }
 
 /**
@@ -58,10 +59,27 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    pid_t pid;
+    pid = fork();
 
+    if (pid == -1) {
+        return false;
+    }
+
+    else if (pid == 0) {
+        execv (command[0], command);
+
+        exit (EXIT_FAILURE);
+    }
+
+    if (waitpid (pid, &status, 0) == -1) {
+        return false; }
+    else if (WIFEXITED (status)) {
+        return WEXITSTATUS (status) == 0;
+    }
     va_end(args);
 
-    return true;
+    return false;
 }
 
 /**
@@ -92,6 +110,35 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    int status;
+    pid_t pid;
+    pid = fork();
+    
+    if (pid == -1) {
+        return false;
+    }
+    else if (pid == 0) {
+        int file_descriptor = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (file_descriptor == -1) {
+            perror("open");
+            exit(EXIT_FAILURE);
+        }
+
+        dup2 (file_descriptor, STDOUT_FILENO);
+    
+        close (file_descriptor);
+        
+        execv (command[0], command);
+        perror("execv");
+        exit(EXIT_FAILURE);
+    }
+
+    if (waitpid (pid, &status, 0) == -1) {
+        return false;
+    }
+    else if (WIFEXITED (status)) {
+        return WEXITSTATUS (status) == 0;
+    }
 
     va_end(args);
 
