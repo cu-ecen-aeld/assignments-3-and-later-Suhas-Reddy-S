@@ -109,7 +109,7 @@ cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/write
 sudo chown -R root:root ${OUTDIR}/rootfs
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
-sed -i 's|../conf/assignment.txt|conf/assignment.txt|' ${OUTDIR}/rootfs/home/finder-test.sh
+cp ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf
 
 # Copy autorun-qemu.sh script into the outdir/rootfs/home directory
 cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
