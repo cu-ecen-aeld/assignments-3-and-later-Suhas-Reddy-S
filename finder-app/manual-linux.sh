@@ -98,8 +98,8 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 # TODO: Add library dependencies to rootfs
 # Copying ld-linux-aarch64.so.1 to the specified directory
 # The find command searches for ld-linux-aarch64.so.1 within the specified $SYSROOT directory
-# The result is passed to ${} to extract the value, and then the cp command is used to copy it to "${OUTDIR}/rootfs/lib"
-cp ${$(find $SYSROOT -name ld-linux-aarch64.so.1)} "${OUTDIR}/rootfs/lib"
+# The result is passed to extract the value, and then the cp command is used to copy it to "${OUTDIR}/rootfs/lib"
+cp $(find $SYSROOT -name ld-linux-aarch64.so.1) "${OUTDIR}/rootfs/lib"
 # Copying libm.so.6, libresolv.so.2, and libc.so.6 to the specified directory
 # The find command is used to locate libm.so.6, libresolv.so.2, and libc.so.6 within the $SYSROOT directory
 # The results are passed to the cp command to copy these libraries to "${OUTDIR}/rootfs/lib64"
