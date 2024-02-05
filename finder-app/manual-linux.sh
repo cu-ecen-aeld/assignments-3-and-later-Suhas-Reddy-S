@@ -57,8 +57,7 @@ fi
 mkdir -p ${OUTDIR}/rootfs
 cd ${OUTDIR}/rootfs
 mkdir -p lib etc dev proc sys bin sbin tmp usr var lib64 home
-mkdir -p usr/bin usr/lib usr/sbin
-mkdir -p var/log
+mkdir -p usr/bin usr/lib usr/sbin var/log home/conf
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
