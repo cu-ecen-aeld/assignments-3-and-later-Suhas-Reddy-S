@@ -57,7 +57,7 @@ fi
 mkdir -p ${OUTDIR}/rootfs
 cd ${OUTDIR}/rootfs
 mkdir -p lib etc dev proc sys bin sbin tmp usr var lib64 home
-mkdir -p usr/bin usr/lib usr/sbin var/log home/conf
+mkdir -p usr/bin usr/lib usr/sbin var/log
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
@@ -109,6 +109,7 @@ make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
+mkdir -p ${OUTDIR}/rootfs/home/conf/
 cp -f ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
 
 # Copy autorun-qemu.sh script into the outdir/rootfs/home directory
