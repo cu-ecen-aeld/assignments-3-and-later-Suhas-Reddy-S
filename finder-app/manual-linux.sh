@@ -21,7 +21,7 @@ else
 	echo "Using passed directory ${OUTDIR} for output"
 fi
 
-mkdir -p ${OUTDIR} || { echo "Failed to create ${OUTDIR} directory"; exit 1; }
+mkdir -p ${OUTDIR} 
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/linux-stable" ]; then
@@ -43,7 +43,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs 
 fi
 
-echo "Adding the Image in outdir"
+cp ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}
 
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
@@ -68,6 +68,7 @@ git clone git://busybox.net/busybox.git
     # TODO:  Configure busybox
     make distclean
     make defconfig
+
 else
     cd busybox
 fi
@@ -102,25 +103,25 @@ sudo mknod -m 600 ${OUTDIR}/rootfs/dev/tty c 5 1
 # TODO: Clean and build the writer utility
 cd ${FINDER_APP_DIR}
 make clean
-make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+make  CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
+cp -rf ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
-cp -f ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
+# cp -f ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
 
 # Copy autorun-qemu.sh script into the outdir/rootfs/home directory
 cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
 
 # TODO: Chown the root directory
-sudo chown -R root:root ${OUTDIR}/rootfs
+cd ${OUTDIR}/rootfs
+sudo chown -R root:root *
 
 # TODO: Create initramfs.cpio.gz
-cd ${OUTDIR}/rootfs
-find . | cpio -H newc -OV --owner root:root > ${OUTDIR}/initramfs.cpio
+find . | cpio -H newc -ov --owner root:root > ${OUTDIR}/initramfs.cpio
 cd ${OUTDIR}
 gzip -f initramfs.cpio
 
-echo "Build completed successfully!
+echo "Build completed successfully!"
