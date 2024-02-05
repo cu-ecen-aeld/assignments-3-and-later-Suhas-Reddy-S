@@ -109,8 +109,6 @@ make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
-rm -rf ${OUTDIR}/rootfs/home/conf/
-mkdir -p ${OUTDIR}/rootfs/home/conf/
 cp -f ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
 
 # Copy autorun-qemu.sh script into the outdir/rootfs/home directory
