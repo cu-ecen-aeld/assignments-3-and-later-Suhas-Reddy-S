@@ -1,6 +1,7 @@
 #!/bin/bash
 # Script outline to install and build kernel.
 # Author: Siddhant Jajoo.
+# Updated by Suhas-Reddy-S
 
 set -e
 set -u
@@ -36,10 +37,13 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
 
     # TODO: Add your kernel build steps here
     make clean
+    echo "emove previous kernel build artifacts and configuration using 'mrproper'"
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+    echo "Configure the kernel using the default configuration for the specified ARM4 architecture"
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+    ech "Build the kernel and modules in parallel using multiple jobs"
     make -j4 ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
-    # make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+    echo "Build device tree blobs (DTBs) for the specified architecture"
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs 
 fi
 
@@ -54,10 +58,15 @@ then
 fi
 
 # TODO: Create necessary base directories
+# Create the root filesystem directory if it doesn't exist
 mkdir -p ${OUTDIR}/rootfs
+# Move into the root filesystem directory
 cd ${OUTDIR}/rootfs
+# Create essential directories in the root filesystem
 mkdir -p lib etc dev proc sys bin sbin tmp usr var lib64 home
+# Create additional directories in the usr and var paths
 mkdir -p usr/bin usr/lib usr/sbin var/log
+
 
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
@@ -66,7 +75,9 @@ git clone git://busybox.net/busybox.git
     cd busybox
     git checkout ${BUSYBOX_VERSION}
     # TODO:  Configure busybox
+    # Clean the BusyBox build directory, removing any previous build artifacts
     make distclean
+    # Configure BusyBox using the default configuration
     make defconfig
 
 else
@@ -84,15 +95,16 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+# Find the dynamic linker for the specified architecture and copy it to rootfs
 interpreter=$(find / -name "ld-linux-aarch64.so.1" 2>/dev/null | head -n 1)
 cp "$interpreter" "${OUTDIR}/rootfs/lib64"
-
+# Find the first occurrence of the libm shared library and add to rootfs
 sharedlib1=$(find / -name "libm.so.6" 2>/dev/null | head -n 1)
 cp "$sharedlib1" "${OUTDIR}/rootfs/lib64"
-
+# Find the first occurrence of the libresolv shared library to rootfs
 sharedlib2=$(find / -name "libresolv.so.2" 2>/dev/null | head -n 1)
 cp "$sharedlib2" "${OUTDIR}/rootfs/lib64"
-
+# Find the first occurrence of the libc shared library and add to rootf
 sharedlib3=$(find / -name "libc.so.6" 2>/dev/null | head -n 1)
 cp "$sharedlib3" "${OUTDIR}/rootfs/lib64"
 
