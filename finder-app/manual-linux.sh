@@ -68,7 +68,7 @@ git clone git://busybox.net/busybox.git
     git checkout ${BUSYBOX_VERSION}
     # TODO:  Configure busybox
     make distclean
-    make deconfig
+    make defconfig
 else
     cd busybox
 fi
