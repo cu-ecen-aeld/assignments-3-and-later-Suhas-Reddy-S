@@ -50,8 +50,7 @@ cd "$OUTDIR"
 if [ -d "${OUTDIR}/rootfs" ]
 then
 	echo "Deleting rootfs directory at ${OUTDIR}/rootfs and starting over"
-    # sudo rm  -rf ${OUTDIR}/rootfs
-    rm  -rf ${OUTDIR}/rootfs
+    sudo rm  -rf ${OUTDIR}/rootfs
 fi
 
 # TODO: Create necessary base directories
@@ -83,22 +82,31 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+interpreter=find ~/ -name "ld-linux-aarch64.so.1"
+cp interpreter "${OUTDIR}/rootfs/lib64"
+
+sharedlib1=find ~/ -name "libm.so.6"
+cp sharedlib1 "${OUTDIR}/rootfs/lib64"
+sharedlib2=find ~/ -name "libresolv.so.2"
+cp sharedlib2 "${OUTDIR}/rootfs/lib64"
+sharedlib3=find ~/ -name "libc.so.6"
+cp sharedlib3 "${OUTDIR}/rootfs/lib64"
 
 # TODO: Make device nodes
-# sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
-# sudo mknod -m 666 ${OUTDIR}/rootfs/dev/tty c 5 0
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
+sudo mknod -m 666 ${OUTDIR}/rootfs/dev/tty c 5 1
 
 # TODO: Clean and build the writer utility
 cd ${FINDER_APP_DIR}
 make clean
-make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} writer
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
 cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 
 # TODO: Chown the root directory
-# sudo chown -R root:root ${OUTDIR}/rootfs
+sudo chown -R root:root ${OUTDIR}/rootfs
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
 sed -i 's|../conf/assignment.txt|conf/assignment.txt|' ${OUTDIR}/rootfs/home/finder-test.sh
@@ -108,6 +116,7 @@ cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
 
 # TODO: Create initramfs.cpio.gz
 cd ${OUTDIR}/rootfs
-find . | cpio -H newc -o | gzip > ${OUTDIR}/initramfs.cpio.gz
+find . | cpio -H newc -OV --owner root:root > ${OUTDIR}/initramfs.cpio
+gzip -f initramfs.cpio
 
 echo "Build completed successfully!
