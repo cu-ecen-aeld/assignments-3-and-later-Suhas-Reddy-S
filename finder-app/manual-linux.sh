@@ -56,7 +56,7 @@ fi
 # TODO: Create necessary base directories
 mkdir -p ${OUTDIR}/rootfs
 cd ${OUTDIR}/rootfs
-mkdir -p lib etc dev proc sys bin sbin tmp usr var lib64
+mkdir -p lib etc dev proc sys bin sbin tmp usr var lib64 home
 mkdir -p usr/bin usr/lib usr/sbin
 mkdir -p var/log
 
