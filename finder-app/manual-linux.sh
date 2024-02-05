@@ -13,6 +13,7 @@ BUSYBOX_VERSION=1_33_1
 FINDER_APP_DIR=$(realpath $(dirname $0))
 ARCH=arm64
 CROSS_COMPILE=aarch64-none-linux-gnu-
+SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 
 if [ $# -lt 1 ]
 then
@@ -95,18 +96,14 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
-# Find the dynamic linker for the specified architecture and copy it to rootfs
-interpreter=$(find / -name "ld-linux-aarch64.so.1" 2>/dev/null | head -n 1)
-cp "$interpreter" "${OUTDIR}/rootfs/lib64"
-# Find the first occurrence of the libm shared library and add to rootfs
-sharedlib1=$(find / -name "libm.so.6" 2>/dev/null | head -n 1)
-cp "$sharedlib1" "${OUTDIR}/rootfs/lib64"
-# Find the first occurrence of the libresolv shared library to rootfs
-sharedlib2=$(find / -name "libresolv.so.2" 2>/dev/null | head -n 1)
-cp "$sharedlib2" "${OUTDIR}/rootfs/lib64"
-# Find the first occurrence of the libc shared library and add to rootf
-sharedlib3=$(find / -name "libc.so.6" 2>/dev/null | head -n 1)
-cp "$sharedlib3" "${OUTDIR}/rootfs/lib64"
+# Copying ld-linux-aarch64.so.1 to the specified directory
+# The find command searches for ld-linux-aarch64.so.1 within the specified $SYSROOT directory
+# The result is passed to ${} to extract the value, and then the cp command is used to copy it to "${OUTDIR}/rootfs/lib"
+cp ${$(find $SYSROOT -name ld-linux-aarch64.so.1)} "${OUTDIR}/rootfs/lib"
+# Copying libm.so.6, libresolv.so.2, and libc.so.6 to the specified directory
+# The find command is used to locate libm.so.6, libresolv.so.2, and libc.so.6 within the $SYSROOT directory
+# The results are passed to the cp command to copy these libraries to "${OUTDIR}/rootfs/lib64"
+cp $(find $SYSROOT -name libm.so.6) $(find $SYSROOT -name libresolv.so.2) $(find $SYSROOT -name libc.so.6) "${OUTDIR}/rootfs/lib64"
 
 # TODO: Make device nodes
 sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
