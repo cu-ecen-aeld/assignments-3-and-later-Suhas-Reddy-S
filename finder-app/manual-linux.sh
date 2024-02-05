@@ -84,8 +84,8 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 # TODO: Add library dependencies to rootfs
 
 # TODO: Make device nodes
-sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
-sudo mknod -m 666 ${OUTDIR}/rootfs/dev/tty c 5 0
+# sudo mknod -m 666 ${OUTDIR}/rootfs/dev/null c 1 3
+# sudo mknod -m 666 ${OUTDIR}/rootfs/dev/tty c 5 0
 
 # TODO: Clean and build the writer utility
 cd ${FINDER_APP_DIR}
@@ -97,7 +97,7 @@ make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} writer
 cp -r ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
 
 # TODO: Chown the root directory
-sudo chown -R root:root ${OUTDIR}/rootfs
+# sudo chown -R root:root ${OUTDIR}/rootfs
 
 # Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
 sed -i 's|../conf/assignment.txt|conf/assignment.txt|' ${OUTDIR}/rootfs/home/finder-test.sh
