@@ -32,8 +32,6 @@ void* threadfunc(void* thread_param)
     // Set thread complete success flag
     th_data->thread_complete_success = true;
     
-    free(th_data);
-    
     return thread_param;
 }
 
