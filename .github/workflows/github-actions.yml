@@ -4,7 +4,6 @@ on:
   push:
 
 jobs:
-<<<<<<< HEAD
   unit-test:
     container: cuaesd/aesd-autotest:unit-test
     runs-on: self-hosted
