@@ -1,7 +1,11 @@
 name: assignment-test
 
-on:
-  push:
+on: 
+    push:
+        tags-ignore:
+            - '*'
+        branches:
+            - '*'
 
 jobs:
   unit-test:
