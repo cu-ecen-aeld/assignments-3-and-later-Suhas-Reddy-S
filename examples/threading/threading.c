@@ -18,16 +18,28 @@ void* threadfunc(void* thread_param)
     struct thread_data *th_data = (struct thread_data *)thread_param;
 
     // Sleep for wait_to_obtain_ms milliseconds
-    usleep(th_data->wait_to_obtain_ms * 1000);
+    if (usleep(th_data->wait_to_obtain_ms * 1000) != 0) {
+    th_data->thread_complete_success = false;
+    ERROR_LOG("Failed while waiting to obtain the mutex");
+    }
 
     // Obtain the mutex
-    pthread_mutex_lock(th_data->mutex);
+    if (pthread_mutex_lock(th_data->mutex) != 0) {
+    th_data->thread_complete_success = false;
+    ERROR_LOG("Failed to lock the mutex");
+    }
 
     // Sleep for wait_to_release_ms milliseconds
-    usleep(th_data->wait_to_release_ms * 1000);
+    if (usleep(th_data->wait_to_release_ms * 1000) != 0) {
+    th_data->thread_complete_success = false;
+    ERROR_LOG("Failed while waiting to release the mutex");
+    }
 
     // Release the mutex
-    pthread_mutex_unlock(th_data->mutex);
+    if (pthread_mutex_unlock(th_data->mutex) != 0) {
+    th_data->thread_complete_success = false;
+    ERROR_LOG("Failed to unlock the mutex");
+    }
 
     // Set thread complete success flag
     th_data->thread_complete_success = true;

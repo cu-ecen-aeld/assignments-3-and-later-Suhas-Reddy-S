@@ -10,6 +10,7 @@ NUMFILES=10
 WRITESTR=AELD_IS_FUN
 WRITEDIR=/tmp/aeld-data
 username=$(cat conf/username.txt)
+OUTPUTFILE=/tmp/assignment4-result.txt
 
 if [ $# -lt 3 ]
 then
@@ -59,6 +60,7 @@ do
 done
 
 OUTPUTSTRING=$(./finder.sh "$WRITEDIR" "$WRITESTR")
+echo ${OUTPUTSTRING} > ${OUTPUTFILE}
 
 # remove temporary directories
 rm -rf /tmp/aeld-data
