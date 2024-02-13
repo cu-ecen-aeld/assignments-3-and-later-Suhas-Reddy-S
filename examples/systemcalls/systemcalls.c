@@ -23,7 +23,8 @@ bool do_system(const char *cmd)
  *   or false() if it returned a failure
 */
 
-    // int sys_return = system(cmd);
+    // Call the system() function with the specified command
+    // Return true if the system() call completed with success, false otherwise
     return system(cmd) == 0;
 }
 
@@ -100,6 +101,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     va_start(args, count);
     char * command[count+1];
     int i;
+    // Populate the command array with the provided arguments
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
@@ -125,12 +127,14 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         return false;
     }
     else if (pid == 0) {
+        // Child process
         int file_descriptor = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (file_descriptor == -1) {
             perror("open");
             exit(EXIT_FAILURE);
         }
 
+        // Redirect standard output to the specified file
         dup2 (file_descriptor, STDOUT_FILENO);
     
         close (file_descriptor);
@@ -140,10 +144,12 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         exit(EXIT_FAILURE);
     }
 
+    // Parent process
     if (waitpid (pid, &status, 0) == -1) {
         return false;
     }
     else if (WIFEXITED (status)) {
+        // Return true if the child process exited successfully (status == 0)
         return WEXITSTATUS (status) == 0;
     }
 

@@ -42,7 +42,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
     echo "Configure the kernel using the default configuration for the specified ARM4 architecture"
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
-    ech "Build the kernel and modules in parallel using multiple jobs"
+    echo "Build the kernel and modules in parallel using multiple jobs"
     make -j4 ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
     echo "Build device tree blobs (DTBs) for the specified architecture"
     make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs 
@@ -116,10 +116,10 @@ make  CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp -rf ${FINDER_APP_DIR}/finder.sh ${FINDER_APP_DIR}/conf ${FINDER_APP_DIR}/writer ${OUTDIR}/rootfs/home/
-
-# Modify the finder-test.sh script to reference conf/assignment.txt instead of ../conf/assignment.txt
-# cp -f ${FINDER_APP_DIR}/conf/assignment.txt ${FINDER_APP_DIR}/conf/username.txt ${OUTDIR}/rootfs/home/conf/
+cp -f ${FINDER_APP_DIR}/{finder.sh,finder-test.sh,writer} ${OUTDIR}/rootfs/home/
+# Copy the conf directory and its contents
+mkdir -p ${OUTDIR}/rootfs/home/conf
+cp -rf ${FINDER_APP_DIR}/conf/* ${OUTDIR}/rootfs/home/conf
 
 # Copy autorun-qemu.sh script into the outdir/rootfs/home directory
 cp ${FINDER_APP_DIR}/autorun-qemu.sh ${OUTDIR}/rootfs/home/
