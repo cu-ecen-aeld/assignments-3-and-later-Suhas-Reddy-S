@@ -5,11 +5,11 @@ DAEMON=/usr/bin/aesdsocket
 case "$1" in
     start)
         echo "Starting aesdsocket..."
-        start-stop-daemon --start --background --exec $DAEMON -- -d
+        start-stop-daemon -S -n aesdsocket -a $DAEMON -- -d
         ;;
     stop)
         echo "Stopping aesdsocket..."
-        start-stop-daemon --stop --exec -d
+        start-stop-daemon -K -n aesdsocket
         ;;
     restart)
         echo "Restarting aesdsocket..."
