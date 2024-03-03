@@ -1,5 +1,5 @@
 # Compiler and CFlAGS selection 'CROSS_COMPILE' is used to set custom arm compiler
-CC := $(CROSS_COMPILE)gcc
+CC ?= $(CROSS_COMPILE)gcc
 CFLAGS := -Wall -Werror
 
 # Sets the source as writer.c and object as writer.o
