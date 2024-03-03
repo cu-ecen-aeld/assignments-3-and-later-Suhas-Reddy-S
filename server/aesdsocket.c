@@ -387,17 +387,20 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    listen_for_connections(custom_socket_fd);
-    accept_clients(custom_socket_fd);
-    
+    while (!sig_exit) {
+        listen_for_connections(custom_socket_fd);
+        accept_clients(custom_socket_fd);
+    }
+
+    // Allow the timestamp thread to write the final timestamp
+    sleep(30);  // Adjust the sleep duration as needed
+
+    // Join completed threads after the main loop
     join_completed_threads();
-    
-    pthread_join(timestamp_thread, NULL);
-	
-    //if(sig_exit) {
-    //	exit(EXIT_SUCCESS);
-    //}
+
+    // Cleanup resources
     cleanup_resources();
+
     return EXIT_SUCCESS;
 }
 
