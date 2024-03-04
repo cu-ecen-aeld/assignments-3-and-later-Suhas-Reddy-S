@@ -159,7 +159,10 @@ void *handle_client(void *arg) {
                 syslog(LOG_INFO, "Couldn't open file");
                 pthread_exit(NULL);
             }
-            write(fd, packetBuffer, packetSize);
+            if (write(fd, packetBuffer, packetSize) == -1) {
+		syslog(LOG_INFO, "Couldn't write to file");
+		exit(EXIT_FAILURE);
+	    }
             
             // Read from the log file and send back to the client
 	    lseek(fd, 0, SEEK_SET);  // Set the file pointer to the beginning of the file
@@ -242,7 +245,9 @@ void daemonize() {
         exit(EXIT_FAILURE);
     }
 
-    chdir("/"); // Change current working directory to root
+    if (chdir("/") == -1) { // Change current working directory to root
+    	syslog(LOG_ERR, "Failed to change to current directory.");
+    }
 
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
@@ -347,8 +352,14 @@ void *append_timestamp(void *arg) {
         pthread_mutex_lock(&file_mutex);
         int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
         if (fd != -1) {
-            write(fd, timestamp_str, strlen(timestamp_str));
-            write(fd, "\n", 1);
+            if(write(fd, timestamp_str, strlen(timestamp_str)) == -1) {
+	    	syslog(LOG_ERR, "Failed to write timestamp");
+		exit(EXIT_FAILURE);
+	    }
+            if(write(fd, "\n", 1) == -1) {
+		syslog(LOG_ERR, "Failed to write newline");
+		exit(EXIT_FAILURE);
+	    }
             close(fd);
         } else {
             syslog(LOG_ERR, "Couldn't open file for timestamp: %m");
