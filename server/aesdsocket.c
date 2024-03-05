@@ -21,13 +21,15 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
+#include <pthread.h>
+#include <time.h>
+#include <sys/queue.h>
+#include <time.h>
 
-
+// Macros for 
 #define CUSTOM_PORT "9000"
 #define MAX_CUSTOM_BUFFER 1024
 #define CUSTOM_LOG_FILE "/var/tmp/mysocketlog"
-
-int custom_socket_fd = -1;
 
 /* Function prototypes */
 void cleanup_resources();
@@ -37,9 +39,25 @@ int create_socket();
 void set_socket_options(int sockfd);
 void bind_socket(int sockfd);
 void listen_for_connections(int sockfd);
-void handle_client(int client_fd);
+void *handle_client(void *arg);
 void accept_clients(int sockfd);
 void daemonize();
+void add_thread(pthread_t tid);
+void remove_thread(pthread_t tid);
+void join_completed_threads();
+void *append_timestamp(void *arg);
+
+typedef struct ThreadNode {
+    pthread_t tid;
+    struct ThreadNode *next;
+} ThreadNode;
+
+ThreadNode *thread_list = NULL; 
+
+volatile bool sig_exit = false;
+int custom_socket_fd = -1;
+pthread_mutex_t list_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Cleans up resources on exit
 void cleanup_resources() {
@@ -49,14 +67,16 @@ void cleanup_resources() {
         close(custom_socket_fd);
         custom_socket_fd = -1;
     }
-    remove(CUSTOM_LOG_FILE);
+    if (remove(CUSTOM_LOG_FILE) != 0) {
+        syslog(LOG_ERR, "Error removing log file: %m");
+    }
 }
 
 // Signal handler for SIGINT and SIGTERM
 void signal_handler(int signo) {
     syslog(LOG_USER, "Signal %d caught, exiting", signo);
     cleanup_resources();
-    exit(EXIT_SUCCESS);
+    sig_exit = true;
 }
 
 // Sets up logging using syslog
@@ -110,9 +130,15 @@ void listen_for_connections(int sockfd) {
 }
 
 // Handles client connections
-void handle_client(int client_fd) {
-    FILE *fp = fopen(CUSTOM_LOG_FILE, "a+");
+void *handle_client(void *arg) {
+    int client_fd = *((int *)arg);
+    free(arg);
+    
+    add_thread(pthread_self());
+    
     char buffer[MAX_CUSTOM_BUFFER];
+    char packetBuffer[MAX_CUSTOM_BUFFER];  // Buffer to accumulate a complete packet
+    size_t packetSize = 0;
 
     while (1) {
         ssize_t bytes_recv = recv(client_fd, buffer, sizeof(buffer), 0);
@@ -120,38 +146,65 @@ void handle_client(int client_fd) {
             break;
         }
 
-        fwrite(buffer, bytes_recv, 1, fp);
+        // Accumulate data until a complete packet is received
+        memcpy(packetBuffer + packetSize, buffer, bytes_recv);
+        packetSize += bytes_recv;
 
+        // Check if a complete packet (ending with '\n') is received
         if (memchr(buffer, '\n', bytes_recv) != NULL) {
+            // Write the complete packet to the log file using system call
+            pthread_mutex_lock(&list_mutex);
+            int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
+            if (fd == -1) {
+                syslog(LOG_INFO, "Couldn't open file");
+                pthread_exit(NULL);
+            }
+            if (write(fd, packetBuffer, packetSize) == -1) {
+		syslog(LOG_INFO, "Couldn't write to file");
+		exit(EXIT_FAILURE);
+	    }
+            
+            // Read from the log file and send back to the client
+	    lseek(fd, 0, SEEK_SET);  // Set the file pointer to the beginning of the file
+
+	    while (1) {
+		ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+		if (bytes_read <= 0) {
+		    break;
+		}
+
+		// Send the contents of the log file back to the client
+		send(client_fd, buffer, bytes_read, 0);
+	    }
+
+            close(fd);
+            pthread_mutex_unlock(&list_mutex);
+            
+            // Reset the packet buffer for the next packet
+            memset(packetBuffer, 0, sizeof(packetBuffer));
+            packetSize = 0;
+
+            // Break after handling the complete packet
             break;
         }
     }
 
-    fclose(fp);
-
-    fp = fopen(CUSTOM_LOG_FILE, "r");
-    while (!feof(fp)) {
-        ssize_t bytes_read = fread(buffer, 1, sizeof(buffer), fp);
-        if (bytes_read <= 0) {
-            break;
-        }
-
-        send(client_fd, buffer, bytes_read, 0);
-    }
-
-    fclose(fp);
     close(client_fd);
+    remove_thread(pthread_self());
+    pthread_exit(NULL);
 }
 
 // Accepts incoming client connections
 void accept_clients(int sockfd) {
-    while (1) {
+    while (!sig_exit) {
         struct sockaddr_in client_addr;
         socklen_t client_addr_size = sizeof(client_addr);
-        int client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_size);
+        int *client_fd = malloc(sizeof(int));
+        *client_fd = accept(sockfd, (struct sockaddr *)&client_addr, &client_addr_size);
 
-        if (client_fd == -1) {
+        if (*client_fd == -1) {
             syslog(LOG_ERR, "Connection acceptance issue: %m");
+            free(client_fd);
             continue;
         }
 
@@ -159,7 +212,16 @@ void accept_clients(int sockfd) {
         inet_ntop(AF_INET, &client_addr.sin_addr, ip_addr, sizeof(ip_addr));
         syslog(LOG_USER, "Connection accepted from %s", ip_addr);
 
-        handle_client(client_fd);
+        // Create a new thread to handle the client
+        pthread_t tid;
+        if (pthread_create(&tid, NULL, handle_client, (void *)client_fd) != 0) {
+            syslog(LOG_ERR, "Thread creation error");
+            free(client_fd);
+            continue;
+        }
+
+        // Detach the thread to allow automatic cleanup when it exits
+        pthread_detach(tid);
 
         syslog(LOG_USER, "Connection closed from %s", ip_addr);
     }
@@ -183,7 +245,9 @@ void daemonize() {
         exit(EXIT_FAILURE);
     }
 
-    chdir("/"); // Change current working directory to root
+    if (chdir("/") == -1) { // Change current working directory to root
+    	syslog(LOG_ERR, "Failed to change to current directory.");
+    }
 
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
@@ -201,6 +265,111 @@ void daemonize() {
     dup2(dev_null, STDERR_FILENO);
 
     close(dev_null);
+}
+
+// Add a thread to the linked list of active threads
+void add_thread(pthread_t tid) {
+    ThreadNode *new_node = malloc(sizeof(ThreadNode));
+    if (new_node == NULL) {
+        syslog(LOG_ERR, "Memory allocation error for thread node");
+        exit(EXIT_FAILURE);
+    }
+
+    new_node->tid = tid;
+    new_node->next = NULL;
+
+    pthread_mutex_lock(&list_mutex);
+
+    // Add the new node to the front of the list
+    new_node->next = thread_list;
+    thread_list = new_node;
+
+    pthread_mutex_unlock(&list_mutex);
+}
+
+void remove_thread(pthread_t tid) {
+    pthread_mutex_lock(&list_mutex);
+
+    ThreadNode *current = thread_list;
+    ThreadNode *prev = NULL;
+
+    // Find the node to remove
+    while (current != NULL && current->tid != tid) {
+        prev = current;
+        current = current->next;
+    }
+
+    // If found, remove the node from the list
+    if (current != NULL) {
+        if (prev == NULL) {
+            // If the node is at the beginning of the list
+            thread_list = current->next;
+        } else {
+            // If the node is in the middle or end of the list
+            prev->next = current->next;
+        }
+
+        free(current);
+    }
+
+    pthread_mutex_unlock(&list_mutex);
+}
+
+// Join completed threads using pthread_join()
+void join_completed_threads() {
+    pthread_mutex_lock(&list_mutex);
+
+    ThreadNode *current = thread_list;
+    ThreadNode *next_node = NULL;
+
+    while (current != NULL) {
+        next_node = current->next;
+
+        // Join the thread and remove it from the list
+        pthread_join(current->tid, NULL);
+        remove_thread(current->tid);
+
+        current = next_node;
+    }
+
+    pthread_mutex_unlock(&list_mutex);
+}
+
+// Appends timestamp to the log file every 10 seconds
+void *append_timestamp(void *arg) {
+    time_t raw_time;
+    struct tm *time_info;
+    char timestamp_str[128];
+
+    while (!sig_exit) {
+        time(&raw_time);
+        time_info = localtime(&raw_time);
+
+        // Format the timestamp string according to RFC 2822
+        strftime(timestamp_str, sizeof(timestamp_str), "timestamp:%a, %d %b %Y %H:%M:%S %z", time_info);
+
+        // Append the timestamp to the log file with mutex protection
+        pthread_mutex_lock(&file_mutex);
+        int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
+        if (fd != -1) {
+            if(write(fd, timestamp_str, strlen(timestamp_str)) == -1) {
+	    	syslog(LOG_ERR, "Failed to write timestamp");
+		exit(EXIT_FAILURE);
+	    }
+            if(write(fd, "\n", 1) == -1) {
+		syslog(LOG_ERR, "Failed to write newline");
+		exit(EXIT_FAILURE);
+	    }
+            close(fd);
+        } else {
+            syslog(LOG_ERR, "Couldn't open file for timestamp: %m");
+        }
+        pthread_mutex_unlock(&file_mutex);
+
+        sleep(10);  // Sleep for 10 seconds
+    }
+
+    pthread_exit(NULL);
 }
 
 // Main function
@@ -221,11 +390,28 @@ int main(int argc, char *argv[]) {
     if (daemon) {
         daemonize();
     }
+    
+    pthread_t timestamp_thread;
+    if (pthread_create(&timestamp_thread, NULL, append_timestamp, NULL) != 0) {
+        syslog(LOG_ERR, "Timestamp thread creation error");
+        cleanup_resources();
+        exit(EXIT_FAILURE);
+    }
 
-    listen_for_connections(custom_socket_fd);
-    accept_clients(custom_socket_fd);
+    while (!sig_exit) {
+        listen_for_connections(custom_socket_fd);
+        accept_clients(custom_socket_fd);
+    }
 
+    // Allow the timestamp thread to write the final timestamp
+    sleep(30);  // Adjust the sleep duration as needed
+
+    // Join completed threads after the main loop
+    join_completed_threads();
+
+    // Cleanup resources
     cleanup_resources();
+
     return EXIT_SUCCESS;
 }
 

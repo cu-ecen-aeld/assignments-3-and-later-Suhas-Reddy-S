@@ -1,6 +1,7 @@
 # Compiler and CFlAGS selection 'CROSS_COMPILE' is used to set custom arm compiler
-CC := $(CROSS_COMPILE)gcc
-CFLAGS := -Wall -Werror
+CC ?= $(CROSS_COMPILE)gcc
+CFLAGS ?= -Wall -Werror
+LDFLAGS ?= -pthread -lrt
 
 # Sets the source as writer.c and object as writer.o
 SRC := aesdsocket.c
@@ -14,11 +15,11 @@ all: $(TARGET)
 
 # Looks for object and maps it to target
 $(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
 # Generates object when source is available
 %.o: %.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
 
 # removes previously created objects and targets
 clean:
