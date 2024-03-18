@@ -179,8 +179,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             kfree(temp);
         }
 
-        dev->entry.size = 0;
-        dev->entry.buffptr = NULL;
+        devp->entry.size = 0;
+        devp->entry.buffptr = NULL;
     }
 	
     unlock_mutex:
