@@ -173,7 +173,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         const char *bufp;
         bufp = NULL;
         
-        bufp = aesd_circular_buffer_add_entry(&dev->buf, &dev->entry);
+        bufp = aesd_circular_buffer_add_entry(&devp->buf, &devp->entry);
         if (bufp)
         {
             kfree(ret_buf);
@@ -229,7 +229,7 @@ int aesd_init_module(void)
      * TODO: initialize the AESD specific portion of the device
      */
 
-	mutex_init(&aesd_device.mutex_lock);
+	mutex_init(&aesd_device.mutex);
     aesd_circular_buffer_init(&aesd_device.buf);	
     result = aesd_setup_cdev(&aesd_device);
 
@@ -250,7 +250,9 @@ void aesd_cleanup_module(void)
      * TODO: cleanup AESD specific poritions here as necessary
      */
 	
-	AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.buf, index) 
+	uint8_t idx = 0;
+	struct aesd_buffer_entry *buf_entry;
+	AESD_CIRCULAR_BUFFER_FOREACH(buf_entry, &aesd_device.buf, idx) 
     {
         kfree(entry->buffptr);
     }
