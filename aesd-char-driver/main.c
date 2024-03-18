@@ -256,7 +256,7 @@ void aesd_cleanup_module(void)
     {
         kfree(entry->buffptr);
     }
-    mutex_destroy(&aesd_device.mutex_lock);
+    mutex_destroy(&aesd_device.lock);
     unregister_chrdev_region(devno, 1);
 }
 
