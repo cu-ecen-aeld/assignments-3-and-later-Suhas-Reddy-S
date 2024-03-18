@@ -127,6 +127,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 		goto exit;
 	}
 	
+	const char __user *temp;
 	temp = kmalloc(count, GFP_KERNEL);
     if (!temp)
     {
@@ -158,9 +159,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         goto unlock_mutex;
     }
     
-    devp->buffer_entry.buffptr = krealloc(devp->buffer_entry.buffptr, 
-    								devp->buffer_entry.size + write_bytes, GFP_KERNEL);
-    if(devp->buffer_entry.buffptr == NULL)
+    devp->buffer_entry.buffptr = krealloc(devp->entry.buffptr, 
+    								devp->entry.size + write_bytes, GFP_KERNEL);
+    if(devp->entry.buffptr == NULL)
     {
         retval = -ENOMEM;
         kfree(temp);
