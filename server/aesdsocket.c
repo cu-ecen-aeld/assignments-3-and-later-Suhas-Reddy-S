@@ -29,7 +29,12 @@
 // Macros for 
 #define CUSTOM_PORT "9000"
 #define MAX_CUSTOM_BUFFER 1024
+#define USE_AESD_CHAR_DEVICE 1
+#ifdef USE_AESD_CHAR_DEVICE
+#define CUSTOM_LOG_FILE "/dev/aesdchar"
+#else
 #define CUSTOM_LOG_FILE "/var/tmp/mysocketlog"
+#endif
 
 /* Function prototypes */
 void cleanup_resources();
@@ -67,9 +72,11 @@ void cleanup_resources() {
         close(custom_socket_fd);
         custom_socket_fd = -1;
     }
+    #if !USE_AESD_CHAR_DEVICE
     if (remove(CUSTOM_LOG_FILE) != 0) {
         syslog(LOG_ERR, "Error removing log file: %m");
     }
+    #endif
 }
 
 // Signal handler for SIGINT and SIGTERM
@@ -337,35 +344,39 @@ void join_completed_threads() {
 
 // Appends timestamp to the log file every 10 seconds
 void *append_timestamp(void *arg) {
+    #if !USE_AESD_CHAR_DEVICE
     time_t raw_time;
     struct tm *time_info;
     char timestamp_str[128];
+    #endif
 
     while (!sig_exit) {
+    	#if !USE_AESD_CHAR_DEVICE
         time(&raw_time);
         time_info = localtime(&raw_time);
 
         // Format the timestamp string according to RFC 2822
         strftime(timestamp_str, sizeof(timestamp_str), "timestamp:%a, %d %b %Y %H:%M:%S %z", time_info);
-
+	
         // Append the timestamp to the log file with mutex protection
         pthread_mutex_lock(&file_mutex);
+       
         int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
         if (fd != -1) {
             if(write(fd, timestamp_str, strlen(timestamp_str)) == -1) {
-	    	syslog(LOG_ERR, "Failed to write timestamp");
-		exit(EXIT_FAILURE);
-	    }
+	    		syslog(LOG_ERR, "Failed to write timestamp");
+				exit(EXIT_FAILURE);
+	    	}
             if(write(fd, "\n", 1) == -1) {
-		syslog(LOG_ERR, "Failed to write newline");
-		exit(EXIT_FAILURE);
-	    }
+				syslog(LOG_ERR, "Failed to write newline");
+				exit(EXIT_FAILURE);
+			}
             close(fd);
         } else {
             syslog(LOG_ERR, "Couldn't open file for timestamp: %m");
         }
         pthread_mutex_unlock(&file_mutex);
-
+		#endif
         sleep(10);  // Sleep for 10 seconds
     }
 

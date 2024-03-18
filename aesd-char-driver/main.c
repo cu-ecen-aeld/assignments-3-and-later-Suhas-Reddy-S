@@ -192,6 +192,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	exit:	
     	return retval;
 }
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
