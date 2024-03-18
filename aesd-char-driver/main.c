@@ -18,6 +18,8 @@
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
+#include <linux/slab.h>
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -84,7 +86,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         goto unlock_mutex;
     }
 	
-	bytes_to_copy = min(count, entry->size - offset);
+	size_t bytes_to_copy;
+	bytes_to_copy = min(count, buf_entry->size - offset);
 	
 	if (copy_to_user(buf, buf_entry->buffptr + offset, bytes_to_copy)) 
     {
@@ -96,7 +99,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     retval = bytes_to_copy;
 	
 	unlock_mutex:
-		mutex_unlock(&devp->mutex_lock);
+		mutex_unlock(&devp->lock);
 	exit:	
     	return retval;
 }
