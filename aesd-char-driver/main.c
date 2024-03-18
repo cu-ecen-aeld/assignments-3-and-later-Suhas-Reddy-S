@@ -176,7 +176,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         bufp = aesd_circular_buffer_add_entry(&devp->buf, &devp->entry);
         if (bufp)
         {
-            kfree(ret_buf);
+            kfree(temp);
         }
 
         dev->entry.size = 0;
@@ -184,7 +184,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     }
 	
     unlock_mutex:
-		mutex_unlock(&devp->mutex_lock);
+		mutex_unlock(&devp->lock);
 	exit:	
     	return retval;
 }
@@ -254,7 +254,7 @@ void aesd_cleanup_module(void)
 	struct aesd_buffer_entry *buf_entry;
 	AESD_CIRCULAR_BUFFER_FOREACH(buf_entry, &aesd_device.buf, idx) 
     {
-        kfree(entry->buffptr);
+        kfree(buf_entry->buffptr);
     }
     mutex_destroy(&aesd_device.lock);
     unregister_chrdev_region(devno, 1);
