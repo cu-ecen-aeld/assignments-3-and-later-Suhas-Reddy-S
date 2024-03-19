@@ -159,12 +159,6 @@ void *handle_client(void *arg) {
 
         // Process incoming data
         for (int i = 0; i < bytes_recv; i++) {
-            // Echo each byte back to the client immediately
-            if (send(client_fd, &buffer[i], 1, 0) == -1) {
-                syslog(LOG_INFO, "Error echoing data back to client");
-                pthread_exit(NULL);
-            }
-            
             // Append each character to the packet buffer
             packetBuffer[packetSize++] = buffer[i];
             
@@ -192,6 +186,28 @@ void *handle_client(void *arg) {
                 packetSize = 0;
             }
         }
+        
+        // Read from the log file and send back to the client
+        pthread_mutex_lock(&list_mutex);
+        int fd = open(CUSTOM_LOG_FILE, O_RDONLY);
+        if (fd == -1) {
+            syslog(LOG_INFO, "Couldn't open file");
+            pthread_mutex_unlock(&list_mutex);
+            pthread_exit(NULL);
+        }
+
+        while (1) {
+            ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+            if (bytes_read <= 0) {
+                break;
+            }
+
+            // Send the contents of the log file back to the client
+            send(client_fd, buffer, bytes_read, 0);
+        }
+
+        close(fd);
+        pthread_mutex_unlock(&list_mutex);
     }
 
     close(client_fd);
