@@ -25,6 +25,8 @@
 #include <time.h>
 #include <sys/queue.h>
 #include <time.h>
+#include <sys/ioctl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 // Macros for 
 #define CUSTOM_PORT "9000"
@@ -150,6 +152,7 @@ void *handle_client(void *arg) {
     char buffer[MAX_CUSTOM_BUFFER];
     char packetBuffer[MAX_CUSTOM_BUFFER];  // Buffer to accumulate a complete packet
     size_t packetSize = 0;
+    struct aesd_seekto seekto;
 
     while (1) {
         ssize_t bytes_recv = recv(client_fd, buffer, sizeof(buffer), 0);
@@ -170,6 +173,8 @@ void *handle_client(void *arg) {
             
             // Check if a complete packet (ending with '\n') is received
             if (buffer[i] == '\n') {
+            	// packetBuffer[packetSize] = '\0'; 
+            
                 // Write the complete packet to the log file using system call
                 pthread_mutex_lock(&list_mutex);
                 int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
@@ -178,6 +183,11 @@ void *handle_client(void *arg) {
                     pthread_mutex_unlock(&list_mutex);
                     pthread_exit(NULL);
                 }
+                
+                if(scanf(packetBuffer, "AESDCHAR_IOCSEEKTO:%u.%u", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+					ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);           		
+            	}
+                
                 if (write(fd, packetBuffer, packetSize) == -1) {
                     syslog(LOG_INFO, "Couldn't write to file");
                     close(fd);

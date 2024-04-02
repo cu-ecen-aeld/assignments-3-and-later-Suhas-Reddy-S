@@ -11,7 +11,6 @@
  *
  * Modified by suhas
  *
- * Referred to akka2103 repo for write
  */
 
 #include <linux/module.h>
@@ -22,6 +21,19 @@
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
 #include <linux/slab.h>
+#include "aesd_ioctl.h"
+
+#define	SEEK_SET (0)
+#define	SEEK_CUR (1)
+#define	SEEK_END (2)
+
+/*
+typedef enum {
+	SEEK_SET = 0,
+	SEEK_CUR,
+	SEEK_END
+}seek_op;
+*/
 
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -69,7 +81,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	struct aesd_dev *devp;
 	devp = filp->private_data;
 	
-	if(!devp) {
+	if(!devp) {               
 		retval = -EPERM;
 		goto exit;
 	}
@@ -188,13 +200,81 @@ exit:
     return retval;
 }
 
+loff_t aesd_llseek(struct file *filp, loff_t off, int operation) {
+	
+	struct aesd_dev *devp = filp->private_data;
+	size_t size = 0, i;
+	loff_t f_pos;
+	
+	switch(operation) {
+		case SEEK_SET: 
+			f_pos = off;
+			break;
+		case SEEK_CUR:
+			f_pos = filp->f_pos + off;
+			break;
+		case SEEK_END:
+			if (mutex_lock_interruptible(&devp->lock)) {
+				return -ERESTARTSYS;
+			}
+			for(i = devp->buf.out_offs; i != devp->buf.in_offs; i++) {
+				size += devp->buf.entry[i].size;
+				i %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			}
+			mutex_unlock(&devp->lock);
+			f_pos = size + off;
+			break;
+		default:
+			return -EINVAL;
+	}
+	filp->f_pos = f_pos;
+	return f_pos;
+	
+}
+
+long int aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+	struct aesd_dev *devp = filp->private_data;
+	struct aesd_seekto seekto;
+	size_t index, i, size = 0;
+	
+	switch (cmd) {
+		case AESDCHAR_IOCSEEKTO:
+			if(copy_from_user(&seekto, (struct aesd_seekto *)arg, sizeof(struct aesd_seekto))) {
+				return -EFAULT;
+			}			
+			if(seekto.write_cmd > AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+				return -EINVAL;
+			}
+			if (mutex_lock_interruptible(&devp->lock)) {
+				return -ERESTARTSYS;
+			}
+			index = devp->buf.out_offs + seekto.write_cmd;
+			index %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			if(seekto.write_cmd_offset > devp->buf.entry[index].size) {
+				mutex_unlock(&devp->lock);
+				return -EINVAL;
+			}
+			for(i = devp->buf.out_offs; i != index; i++) {
+				size += devp->buf.entry[i].size;
+				i %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			}
+			filp->f_pos = size + seekto.write_cmd_offset;
+			mutex_unlock(&devp->lock);
+			return 0;
+		default:
+			return -EINVAL;
+			
+	}
+}
 
 struct file_operations aesd_fops = {
-    .owner =    THIS_MODULE,
-    .read =     aesd_read,
-    .write =    aesd_write,
-    .open =     aesd_open,
-    .release =  aesd_release,
+    .owner          = THIS_MODULE,
+    .read           = aesd_read,
+    .write          = aesd_write,
+    .open           = aesd_open,
+    .release        = aesd_release,
+    .llseek         = aesd_llseek,
+    .unlocked_ioctl = aesd_ioctl,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
@@ -260,8 +340,6 @@ void aesd_cleanup_module(void)
     mutex_destroy(&aesd_device.lock);
     unregister_chrdev_region(devno, 1);
 }
-
-
 
 module_init(aesd_init_module);
 module_exit(aesd_cleanup_module);
