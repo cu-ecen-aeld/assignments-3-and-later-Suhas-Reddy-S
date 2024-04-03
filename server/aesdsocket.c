@@ -141,69 +141,65 @@ void listen_for_connections(int sockfd) {
 void *handle_client(void *arg) {
     int client_fd = *((int *)arg);
     free(arg);
-    int clear_fd = open(CUSTOM_LOG_FILE, O_TRUNC | O_WRONLY | O_CREAT, 0644);
-    if (clear_fd == -1) {
-        syslog(LOG_INFO, "Couldn't clear log file");
+
+    int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
+    if (fd == -1) {
+        syslog(LOG_INFO, "Couldn't open log file");
         pthread_exit(NULL);
     }
-    close(clear_fd);
-    add_thread(pthread_self());
     
+    add_thread(pthread_self());
+
     char buffer[MAX_CUSTOM_BUFFER];
     char packetBuffer[MAX_CUSTOM_BUFFER];  // Buffer to accumulate a complete packet
     size_t packetSize = 0;
+    bool packet_complete = false;
     struct aesd_seekto seekto;
 
-    while (1) {
+    while (!packet_complete) {
         ssize_t bytes_recv = recv(client_fd, buffer, sizeof(buffer), 0);
         if (bytes_recv <= 0) {
             break;
         }
 
-        // Process incoming data
+        // Append received data to the packet buffer
         for (int i = 0; i < bytes_recv; i++) {
-            // Echo each byte back to the client immediately
-            if (send(client_fd, &buffer[i], 1, 0) == -1) {
-                syslog(LOG_INFO, "Error echoing data back to client");
-                pthread_exit(NULL);
-            }
-            
-            // Append each character to the packet buffer
             packetBuffer[packetSize++] = buffer[i];
-            
-            // Check if a complete packet (ending with '\n') is received
             if (buffer[i] == '\n') {
-            	// packetBuffer[packetSize] = '\0'; 
-            
-                // Write the complete packet to the log file using system call
-                pthread_mutex_lock(&list_mutex);
-                int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
-                if (fd == -1) {
-                    syslog(LOG_INFO, "Couldn't open file");
-                    pthread_mutex_unlock(&list_mutex);
-                    pthread_exit(NULL);
-                }
-                
-                if(scanf(packetBuffer, "AESDCHAR_IOCSEEKTO:%u.%u", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
-					ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);           		
-            	}
-                
-                if (write(fd, packetBuffer, packetSize) == -1) {
-                    syslog(LOG_INFO, "Couldn't write to file");
-                    close(fd);
-                    pthread_mutex_unlock(&list_mutex);
-                    exit(EXIT_FAILURE);
-                }
-                close(fd);
-                pthread_mutex_unlock(&list_mutex);
-                
-                // Reset the packet buffer and packet size for the next packet
-                memset(packetBuffer, 0, sizeof(packetBuffer));
-                packetSize = 0;
+                packet_complete = true;
+                packetBuffer[packetSize] = '\0';
+                break;
             }
         }
     }
 
+    if(sscanf(packetBuffer, "AESDCHAR_IOCSEEKTO:%u,%u", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+        ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+    } else {
+        pthread_mutex_lock(&list_mutex);
+        if (write(fd, packetBuffer, packetSize) != packetSize) {
+            syslog(LOG_INFO, "Couldn't write to file");
+            close(fd);
+            pthread_mutex_unlock(&list_mutex);
+            pthread_exit(NULL);
+        }
+        pthread_mutex_unlock(&list_mutex);
+    }
+
+    // Read from file and send back over socket
+    ssize_t bytes_read;
+    while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+        if (send(client_fd, buffer, bytes_read, 0) == -1) {
+            syslog(LOG_INFO, "Error sending file content back to client");
+            break;
+        }
+    }
+
+    if (bytes_read == -1) {
+        syslog(LOG_INFO, "Error reading from file");
+    }
+
+    close(fd);
     close(client_fd);
     remove_thread(pthread_self());
     pthread_exit(NULL);
