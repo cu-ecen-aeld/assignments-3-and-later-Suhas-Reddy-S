@@ -25,6 +25,8 @@
 #include <time.h>
 #include <sys/queue.h>
 #include <time.h>
+#include <sys/ioctl.h>
+#include "../aesd-char-driver/aesd_ioctl.h"
 
 // Macros for 
 #define CUSTOM_PORT "9000"
@@ -136,70 +138,73 @@ void listen_for_connections(int sockfd) {
     }
 }
 
-// Handles client connections
 void *handle_client(void *arg) {
     int client_fd = *((int *)arg);
     free(arg);
+
+    int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
+    if (fd == -1) {
+        syslog(LOG_INFO, "Couldn't open log file");
+        pthread_exit(NULL);
+    }
     
     add_thread(pthread_self());
-    
+
     char buffer[MAX_CUSTOM_BUFFER];
     char packetBuffer[MAX_CUSTOM_BUFFER];  // Buffer to accumulate a complete packet
     size_t packetSize = 0;
+    bool packet_complete = false;
+    struct aesd_seekto seekto;
 
-    while (1) {
+    while (!packet_complete) {
         ssize_t bytes_recv = recv(client_fd, buffer, sizeof(buffer), 0);
         if (bytes_recv <= 0) {
             break;
         }
 
-        // Accumulate data until a complete packet is received
-        memcpy(packetBuffer + packetSize, buffer, bytes_recv);
-        packetSize += bytes_recv;
-
-        // Check if a complete packet (ending with '\n') is received
-        if (memchr(buffer, '\n', bytes_recv) != NULL) {
-            // Write the complete packet to the log file using system call
-            pthread_mutex_lock(&list_mutex);
-            int fd = open(CUSTOM_LOG_FILE, O_RDWR | O_CREAT | O_APPEND, 0777);
-            if (fd == -1) {
-                syslog(LOG_INFO, "Couldn't open file");
-                pthread_exit(NULL);
+        // Append received data to the packet buffer
+        for (int i = 0; i < bytes_recv; i++) {
+            packetBuffer[packetSize++] = buffer[i];
+            if (buffer[i] == '\n') {
+                packet_complete = true;
+                packetBuffer[packetSize] = '\0';
+                break;
             }
-            if (write(fd, packetBuffer, packetSize) == -1) {
-		syslog(LOG_INFO, "Couldn't write to file");
-		exit(EXIT_FAILURE);
-	    }
-            
-            // Read from the log file and send back to the client
-	    lseek(fd, 0, SEEK_SET);  // Set the file pointer to the beginning of the file
+        }
+    }
 
-	    while (1) {
-		ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
-		if (bytes_read <= 0) {
-		    break;
-		}
-
-		// Send the contents of the log file back to the client
-		send(client_fd, buffer, bytes_read, 0);
-	    }
-
+    if(sscanf(packetBuffer, "AESDCHAR_IOCSEEKTO:%u,%u", &seekto.write_cmd, &seekto.write_cmd_offset) == 2) {
+        ioctl(fd, AESDCHAR_IOCSEEKTO, &seekto);
+    } else {
+        pthread_mutex_lock(&list_mutex);
+        if (write(fd, packetBuffer, packetSize) != packetSize) {
+            syslog(LOG_INFO, "Couldn't write to file");
             close(fd);
             pthread_mutex_unlock(&list_mutex);
-            
-            // Reset the packet buffer for the next packet
-            memset(packetBuffer, 0, sizeof(packetBuffer));
-            packetSize = 0;
+            pthread_exit(NULL);
+        }
+        pthread_mutex_unlock(&list_mutex);
+    }
 
-            // Break after handling the complete packet
+    // Read from file and send back over socket
+    ssize_t bytes_read;
+    while ((bytes_read = read(fd, buffer, sizeof(buffer))) > 0) {
+        if (send(client_fd, buffer, bytes_read, 0) == -1) {
+            syslog(LOG_INFO, "Error sending file content back to client");
             break;
         }
     }
 
+    if (bytes_read == -1) {
+        syslog(LOG_INFO, "Error reading from file");
+    }
+
+    close(fd);
     close(client_fd);
     remove_thread(pthread_self());
     pthread_exit(NULL);
 }
+
 
 // Accepts incoming client connections
 void accept_clients(int sockfd) {
@@ -231,6 +236,8 @@ void accept_clients(int sockfd) {
         pthread_detach(tid);
 
         syslog(LOG_USER, "Connection closed from %s", ip_addr);
+        
+        
     }
 }
 

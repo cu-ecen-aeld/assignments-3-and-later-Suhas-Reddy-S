@@ -65,40 +65,28 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 */
 const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
-    /**
-    * TODO: implement per description
-    */
-    
-    const char *bufp;
-    bufp = NULL;
-    
-    // Validate input parameters
-    if(buffer == NULL || add_entry == NULL) {
-        goto exit;
+    const char *bufp = NULL;
+    if (buffer == NULL || add_entry == NULL)
+    {
+        return NULL;
     }
-
-    buffer->entry[buffer->in_offs] = *add_entry;
-
-	if(buffer->full)
+    
+    if(buffer->full)
     {
         bufp = buffer->entry[buffer->out_offs].buffptr;
     }
-    // Move the input offset
-    buffer->in_offs++;
-    buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    buffer->entry[buffer->in_offs] = *add_entry;
+    buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
-    // Check if the buffer is full
-    if(buffer->full) {
-        // Move the output offset to the next entry, effectively removing the oldest entry
-        buffer->out_offs++;
-        buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+    if (buffer->full)
+    {
+        buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     }
-
-    // Update buffer state
-    buffer->full = (buffer->in_offs == buffer->out_offs);
-    
-    exit:
-		return bufp;
+    else if (buffer->in_offs == buffer->out_offs)
+    {
+        buffer->full = true;
+    }
+    return bufp;
 }
 
 /**

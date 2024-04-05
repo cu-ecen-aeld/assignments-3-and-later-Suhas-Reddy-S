@@ -9,6 +9,8 @@
  * @date 2019-10-22
  * @copyright Copyright (c) 2019
  *
+ * Modified by suhas
+ *
  */
 
 #include <linux/module.h>
@@ -19,6 +21,19 @@
 #include <linux/fs.h> // file_operations
 #include "aesdchar.h"
 #include <linux/slab.h>
+#include "aesd_ioctl.h"
+
+#define	SEEK_SET (0)
+#define	SEEK_CUR (1)
+#define	SEEK_END (2)
+
+/*
+typedef enum {
+	SEEK_SET = 0,
+	SEEK_CUR,
+	SEEK_END
+}seek_op;
+*/
 
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -66,7 +81,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 	struct aesd_dev *devp;
 	devp = filp->private_data;
 	
-	if(!devp) {
+	if(!devp) {               
 		retval = -EPERM;
 		goto exit;
 	}
@@ -105,100 +120,161 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 }
 
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
-                loff_t *f_pos)
+                   loff_t *f_pos)
 {
     ssize_t retval = -ENOMEM;
-    PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
-     
-    // validate inputs
-	if(filp==NULL || buf==NULL) {
-		retval = -EINVAL;
-		goto exit;
-	}
-	
-	struct aesd_dev *devp;
-	devp = filp->private_data;
-	
-	if(!devp) {
-		retval = -EPERM;
-		goto exit;
-	}
-	
-	const char __user *temp;
-	temp = kmalloc(count, GFP_KERNEL);
-    if (!temp)
-    {
+    PDEBUG("write %zu bytes with offset %lld", count, *f_pos);
+
+    // Validate inputs
+    if (!filp || !buf) {
+        retval = -EINVAL;
+        goto exit;
+    }
+
+    // Get a reference to the device structure
+    struct aesd_dev *devp = filp->private_data;
+    if (!devp) {
+        retval = -EPERM;
+        goto exit;
+    }
+
+    // Allocate temporary buffer for user data
+    char *temp = kmalloc(count, GFP_KERNEL);
+    if (!temp) {
         retval = -ENOMEM;
         goto exit;
     }
-    
-    if (copy_from_user(temp, buf, count))
-    {
+
+    // Copy data from user space
+    if (copy_from_user(temp, buf, count)) {
         retval = -EFAULT;
         kfree(temp);
         goto exit;
     }
-    
-    char* end_of_text;
+
+    // Find end of text ('\n')
+    char *end_of_text = memchr(temp, '\n', count);
     size_t write_bytes = count;
-    end_of_text = memchr(temp, '\n', count);
-    if(end_of_text != NULL)
-    {
-        write_bytes = (end_of_text - temp) + 1;
+    if (end_of_text) {
+        write_bytes = end_of_text - temp + 1;
     }
 
-    devp = filp->private_data;
-    
-	if (mutex_lock_interruptible(&devp->lock)) 
-    {
+    // Lock mutex to protect shared data
+    if (mutex_lock_interruptible(&devp->lock)) {
         retval = -ERESTARTSYS;
         kfree(temp);
-        goto unlock_mutex;
-    }
-    
-    devp->entry.buffptr = krealloc(devp->entry.buffptr, 
-    								devp->entry.size + write_bytes, GFP_KERNEL);
-    if(devp->entry.buffptr == NULL)
-    {
+        goto exit;
+    }	
+	
+    // Reallocate memory for the entry buffer
+    devp->entry.buffptr = krealloc(devp->entry.buffptr, devp->entry.size + write_bytes, GFP_KERNEL);
+    if (!devp->entry.buffptr) {
         retval = -ENOMEM;
+        mutex_unlock(&devp->lock);
         kfree(temp);
-        goto unlock_mutex;
+        goto exit;
     }
-    
+
+    // Copy data to entry buffer
     memcpy(devp->entry.buffptr + devp->entry.size, temp, write_bytes);
-
+    kfree(temp);
     devp->entry.size += write_bytes;
-    
-    if (end_of_text)
-    {
-        const char *bufp;
-        bufp = NULL;
-        
-        bufp = aesd_circular_buffer_add_entry(&devp->buf, &devp->entry);
-        if (bufp)
-        {
-            kfree(temp);
-        }
 
+    // Add entry to circular buffer if end of text is found
+    if (end_of_text) {
+        const char *bufp = aesd_circular_buffer_add_entry(&devp->buf, &devp->entry);
+        if (bufp) {
+		//if (devp->buf.full) {
+		    kfree(bufp); // Free memory associated with overwritten entry if circular buffer is full
+			//}
+	    }
+		
         devp->entry.size = 0;
         devp->entry.buffptr = NULL;
     }
+
+    mutex_unlock(&devp->lock);
+    retval = write_bytes;
+
+exit:
+    return retval;
+}
+
+loff_t aesd_llseek(struct file *filp, loff_t off, int operation) {
 	
-    unlock_mutex:
-		mutex_unlock(&devp->lock);
-	exit:	
-    	return retval;
+	struct aesd_dev *devp = filp->private_data;
+	size_t size = 0, i;
+	loff_t f_pos;
+	
+	switch(operation) {
+		case SEEK_SET: 
+			f_pos = off;
+			break;
+		case SEEK_CUR:
+			f_pos = filp->f_pos + off;
+			break;
+		case SEEK_END:
+			if (mutex_lock_interruptible(&devp->lock)) {
+				return -ERESTARTSYS;
+			}
+			for(i = devp->buf.out_offs; i != devp->buf.in_offs; i++) {
+				size += devp->buf.entry[i].size;
+				i %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			}
+			mutex_unlock(&devp->lock);
+			f_pos = size + off;
+			break;
+		default:
+			return -EINVAL;
+	}
+	filp->f_pos = f_pos;
+	return f_pos;
+	
+}
+
+long int aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg) {
+	struct aesd_dev *devp = filp->private_data;
+	struct aesd_seekto seekto;
+	size_t index, i, size = 0;
+	
+	switch (cmd) {
+		case AESDCHAR_IOCSEEKTO:
+			if(copy_from_user(&seekto, (struct aesd_seekto *)arg, sizeof(struct aesd_seekto))) {
+				return -EFAULT;
+			}			
+			if(seekto.write_cmd > AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED) {
+				return -EINVAL;
+			}
+			if (mutex_lock_interruptible(&devp->lock)) {
+				return -ERESTARTSYS;
+			}
+			index = devp->buf.out_offs + seekto.write_cmd;
+			index %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			if(seekto.write_cmd_offset > devp->buf.entry[index].size) {
+				mutex_unlock(&devp->lock);
+				return -EINVAL;
+			}
+			for(i = devp->buf.out_offs; i != index; i++) {
+				size += devp->buf.entry[i].size;
+				i %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+			}
+			filp->f_pos = size + seekto.write_cmd_offset;
+			mutex_unlock(&devp->lock);
+			return 0;
+		default:
+			return -EINVAL;
+			
+	}
 }
 
 struct file_operations aesd_fops = {
-    .owner =    THIS_MODULE,
-    .read =     aesd_read,
-    .write =    aesd_write,
-    .open =     aesd_open,
-    .release =  aesd_release,
+    .owner          = THIS_MODULE,
+    .read           = aesd_read,
+    .write          = aesd_write,
+    .open           = aesd_open,
+    .release        = aesd_release,
+    .llseek         = aesd_llseek,
+    .unlocked_ioctl = aesd_ioctl,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
@@ -264,8 +340,6 @@ void aesd_cleanup_module(void)
     mutex_destroy(&aesd_device.lock);
     unregister_chrdev_region(devno, 1);
 }
-
-
 
 module_init(aesd_init_module);
 module_exit(aesd_cleanup_module);
